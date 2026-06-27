@@ -8,17 +8,18 @@ const router = express.Router();
 
 function signToken(user) {
   return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d"
+    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 }
 
 function sendTokenCookie(res, token) {
   const cookieName = process.env.COOKIE_NAME || "ravively_token";
+  const isProd = process.env.NODE_ENV === "production";
   res.cookie(cookieName, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
@@ -26,15 +27,32 @@ function sendTokenCookie(res, token) {
 // Crée en une fois l'association + le compte utilisateur "association" rattaché
 router.post("/register-association", async (req, res) => {
   try {
-    const { associationName, email, password, firstname, lastname, phone, address, city, postalCode, siret } = req.body;
+    const {
+      associationName,
+      email,
+      password,
+      firstname,
+      lastname,
+      phone,
+      address,
+      city,
+      postalCode,
+      siret,
+    } = req.body;
 
     if (!associationName || !email || !password || !firstname || !lastname) {
-      return res.status(400).json({ message: "Tous les champs obligatoires ne sont pas renseignés." });
+      return res
+        .status(400)
+        .json({
+          message: "Tous les champs obligatoires ne sont pas renseignés.",
+        });
     }
 
     const existing = await User.findOne({ email });
     if (existing) {
-      return res.status(409).json({ message: "Un compte existe déjà avec cet email." });
+      return res
+        .status(409)
+        .json({ message: "Un compte existe déjà avec cet email." });
     }
 
     const association = await Association.create({
@@ -44,7 +62,7 @@ router.post("/register-association", async (req, res) => {
       address,
       city,
       postalCode,
-      siret
+      siret,
     });
 
     const user = await User.create({
@@ -53,7 +71,7 @@ router.post("/register-association", async (req, res) => {
       email,
       password,
       role: "association",
-      associationId: association._id
+      associationId: association._id,
     });
 
     const token = signToken(user);
@@ -61,11 +79,23 @@ router.post("/register-association", async (req, res) => {
 
     res.status(201).json({
       token,
-      user: { id: user._id, firstname, lastname, email, role: user.role, associationId: association._id },
-      association
+      user: {
+        id: user._id,
+        firstname,
+        lastname,
+        email,
+        role: user.role,
+        associationId: association._id,
+      },
+      association,
     });
   } catch (err) {
-    res.status(500).json({ message: "Erreur lors de la création du compte.", error: err.message });
+    res
+      .status(500)
+      .json({
+        message: "Erreur lors de la création du compte.",
+        error: err.message,
+      });
   }
 });
 
@@ -79,7 +109,9 @@ router.post("/login", async (req, res) => {
 
     const user = await User.findOne({ email }).select("+password");
     if (!user || !(await user.comparePassword(password))) {
-      return res.status(401).json({ message: "Email ou mot de passe incorrect." });
+      return res
+        .status(401)
+        .json({ message: "Email ou mot de passe incorrect." });
     }
 
     const token = signToken(user);
@@ -93,18 +125,25 @@ router.post("/login", async (req, res) => {
         lastname: user.lastname,
         email: user.email,
         role: user.role,
-        associationId: user.associationId
-      }
+        associationId: user.associationId,
+      },
     });
   } catch (err) {
-    res.status(500).json({ message: "Erreur lors de la connexion.", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Erreur lors de la connexion.", error: err.message });
   }
 });
 
 // POST /api/auth/logout
 router.post("/logout", (req, res) => {
   const cookieName = process.env.COOKIE_NAME || "ravively_token";
-  res.clearCookie(cookieName);
+  const isProd = process.env.NODE_ENV === "production";
+  res.clearCookie(cookieName, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+  });
   res.json({ message: "Déconnecté." });
 });
 
@@ -117,8 +156,8 @@ router.get("/me", requireAuth, async (req, res) => {
       lastname: req.user.lastname,
       email: req.user.email,
       role: req.user.role,
-      associationId: req.user.associationId
-    }
+      associationId: req.user.associationId,
+    },
   });
 });
 
