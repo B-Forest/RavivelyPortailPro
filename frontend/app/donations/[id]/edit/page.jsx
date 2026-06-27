@@ -1,27 +1,42 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { api } from "../../../lib/api";
-import { CATEGORIES, UNITS, ALLERGENS } from "../../../lib/constants";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { api } from "../../../../lib/api";
+import { CATEGORIES, UNITS, ALLERGENS } from "../../../../lib/constants";
+import { CardSkeleton } from "../../../../components/Skeleton";
 
-const initialState = {
-  title: "",
-  category: "",
-  quantity: "",
-  unit: "",
-  expirationDate: "",
-  allergens: [],
-  pickupInstructions: "",
-  description: ""
-};
-
-export default function NewDonationPage() {
+export default function EditDonationPage() {
   const router = useRouter();
-  const [form, setForm] = useState(initialState);
+  const params = useParams();
+  const { id } = params;
+
+  const [form, setForm] = useState(null); // null = pas encore chargé
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [serverError, setServerError] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { donation } = await api.getDonation(id);
+        setForm({
+          title: donation.title || "",
+          category: donation.category || "",
+          quantity: donation.quantity ?? "",
+          unit: donation.unit || "",
+          expirationDate: donation.expirationDate ? donation.expirationDate.slice(0, 10) : "",
+          allergens: donation.allergens || [],
+          pickupInstructions: donation.pickupInstructions || "",
+          description: donation.description || ""
+        });
+      } catch (err) {
+        setLoadError(err.message || "Impossible de charger ce don.");
+      }
+    }
+    load();
+  }, [id]);
 
   function update(field) {
     return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
@@ -36,7 +51,7 @@ export default function NewDonationPage() {
 
   function validate() {
     const errs = {};
-    if (!form.title.trim()) errs.title = "Veuillez indiquer le nom du produit (ex : Pains et viennoiseries du jour).";
+    if (!form.title.trim()) errs.title = "Veuillez indiquer le nom du produit.";
     if (!form.category) errs.category = "Veuillez choisir une catégorie.";
     if (!form.quantity || Number(form.quantity) <= 0) errs.quantity = "Veuillez indiquer le nombre de kilos, cagettes ou portions.";
     if (!form.unit) errs.unit = "Veuillez choisir une unité.";
@@ -52,41 +67,50 @@ export default function NewDonationPage() {
 
     setSubmitting(true);
     try {
-      await api.createDonation({ ...form, quantity: Number(form.quantity) });
+      await api.updateDonation(id, { ...form, quantity: Number(form.quantity) });
       router.push("/dashboard");
     } catch (err) {
-      setServerError(err.message || "Impossible d'enregistrer le don.");
+      setServerError(err.message || "Impossible d'enregistrer les modifications.");
     } finally {
       setSubmitting(false);
     }
   }
 
+  if (loadError) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-ravively-cream px-4">
+        <p className="field-error">{loadError}</p>
+      </main>
+    );
+  }
+
+  if (!form) {
+    return <CardSkeleton />;
+  }
+
   return (
     <main className="min-h-screen bg-ravively-cream px-4 py-8 sm:px-8">
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-1 text-3xl font-bold text-ravively-green">Déclarer un nouveau don</h1>
-        <p className="mb-6 text-lg text-gray-600">Remplissez ce formulaire simple, étape par étape.</p>
+        <h1 className="mb-1 text-3xl font-bold text-ravively-green">Modifier ce don</h1>
+        <p className="mb-6 text-lg text-gray-600">Corrigez les informations ci-dessous.</p>
 
-        <form onSubmit={handleSubmit} className="card space-y-6" aria-label="Formulaire de déclaration de don">
-          {/* Dénomination */}
+        <form onSubmit={handleSubmit} className="card space-y-6" aria-label="Formulaire de modification de don">
           <div>
             <label htmlFor="title" className="mb-1 block text-base font-medium">
-              1. Quel produit donnez-vous ? *
+              Quel produit donnez-vous ? *
             </label>
             <input
               id="title"
               value={form.title}
               onChange={update("title")}
-              placeholder="Ex : Pains et viennoiseries du jour"
               className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:border-ravively-green focus:outline-none"
             />
             {errors.title && <p className="field-error">{errors.title}</p>}
           </div>
 
-          {/* Catégorisation */}
           <div>
             <label htmlFor="category" className="mb-1 block text-base font-medium">
-              2. Catégorie *
+              Catégorie *
             </label>
             <select
               id="category"
@@ -104,11 +128,10 @@ export default function NewDonationPage() {
             {errors.category && <p className="field-error">{errors.category}</p>}
           </div>
 
-          {/* Volumes */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="quantity" className="mb-1 block text-base font-medium">
-                3. Quantité *
+                Quantité *
               </label>
               <input
                 id="quantity"
@@ -117,7 +140,6 @@ export default function NewDonationPage() {
                 step="0.1"
                 value={form.quantity}
                 onChange={update("quantity")}
-                placeholder="Ex : 30"
                 className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
               />
               {errors.quantity && <p className="field-error">{errors.quantity}</p>}
@@ -143,10 +165,9 @@ export default function NewDonationPage() {
             </div>
           </div>
 
-          {/* DLC */}
           <div>
             <label htmlFor="expirationDate" className="mb-1 block text-base font-medium">
-              4. Date limite de consommation (DLC) *
+              Date limite de consommation (DLC) *
             </label>
             <input
               id="expirationDate"
@@ -158,9 +179,8 @@ export default function NewDonationPage() {
             {errors.expirationDate && <p className="field-error">{errors.expirationDate}</p>}
           </div>
 
-          {/* Allergènes */}
           <div>
-            <p className="mb-2 block text-base font-medium">5. Allergènes présents (si connus)</p>
+            <p className="mb-2 block text-base font-medium">Allergènes présents (si connus)</p>
             <div className="flex flex-wrap gap-2">
               {ALLERGENS.map((a) => (
                 <label
@@ -183,21 +203,18 @@ export default function NewDonationPage() {
             </div>
           </div>
 
-          {/* Consignes de récupération */}
           <div>
             <label htmlFor="pickupInstructions" className="mb-1 block text-base font-medium">
-              6. Consignes de récupération
+              Consignes de récupération
             </label>
             <input
               id="pickupInstructions"
               value={form.pickupInstructions}
               onChange={update("pickupInstructions")}
-              placeholder="Ex : Passer par la porte de service derrière la mairie"
               className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
             />
           </div>
 
-          {/* Description libre */}
           <div>
             <label htmlFor="description" className="mb-1 block text-base font-medium">
               Précisions complémentaires (optionnel)
@@ -215,7 +232,7 @@ export default function NewDonationPage() {
 
           <div className="flex gap-4">
             <button type="submit" disabled={submitting} className="btn-primary">
-              {submitting ? "Enregistrement..." : "Valider le don"}
+              {submitting ? "Enregistrement..." : "Enregistrer les modifications"}
             </button>
             <button type="button" onClick={() => router.push("/dashboard")} className="btn-ghost">
               Annuler

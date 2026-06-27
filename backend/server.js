@@ -6,6 +6,7 @@ const connectDB = require("./config/db");
 
 const authRoutes = require("./routes/auth");
 const donationRoutes = require("./routes/donations");
+const associationRoutes = require("./routes/associations");
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.get("/api/health", (req, res) => res.json({ status: "ok", service: "ravively
 
 app.use("/api/auth", authRoutes);
 app.use("/api/donations", donationRoutes);
+app.use("/api/associations", associationRoutes);
 
 // 404
 app.use((req, res) => res.status(404).json({ message: "Route non trouvée." }));

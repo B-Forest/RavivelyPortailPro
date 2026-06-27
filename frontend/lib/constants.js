@@ -12,11 +12,11 @@ export const UNITS = [
 ];
 
 export const STATUSES = {
-  available: { label: "Disponible", color: "bg-green-100 text-green-800" },
-  reserved: { label: "Réservé", color: "bg-yellow-100 text-yellow-800" },
-  in_progress: { label: "En cours de récupération", color: "bg-blue-100 text-blue-800" },
-  collected: { label: "Récupéré", color: "bg-gray-200 text-gray-700" },
-  cancelled: { label: "Annulé", color: "bg-red-100 text-red-700" }
+  available: { label: "Disponible", color: "bg-emerald-500 text-white" },
+  reserved: { label: "Réservé", color: "bg-orange-500 text-white" },
+  in_progress: { label: "En cours de récupération", color: "bg-blue-500 text-white" },
+  collected: { label: "Récupéré", color: "bg-gray-400 text-white" },
+  cancelled: { label: "Annulé", color: "bg-red-500 text-white" }
 };
 
 export const ALLERGENS = [

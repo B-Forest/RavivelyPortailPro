@@ -37,6 +37,91 @@ router.post("/", requireAuth, requireAssociation, async (req, res) => {
   }
 });
 
+// PUT /api/donations/:id — Modifier un don existant (association propriétaire uniquement)
+router.put("/:id", requireAuth, requireAssociation, async (req, res) => {
+  try {
+    const donation = await Donation.findOne({ _id: req.params.id, associationId: req.user.associationId });
+    if (!donation) {
+      return res.status(404).json({ message: "Don introuvable." });
+    }
+
+    const { title, description, category, quantity, unit, expirationDate, allergens, pickupInstructions } = req.body;
+
+    donation.title = title ?? donation.title;
+    donation.description = description ?? donation.description;
+    donation.category = category ?? donation.category;
+    donation.quantity = quantity ?? donation.quantity;
+    donation.unit = unit ?? donation.unit;
+    donation.expirationDate = expirationDate ?? donation.expirationDate;
+    donation.allergens = allergens ?? donation.allergens;
+    donation.pickupInstructions = pickupInstructions ?? donation.pickupInstructions;
+
+    await donation.save();
+    res.json({ donation });
+  } catch (err) {
+    if (err.name === "ValidationError") {
+      const messages = Object.values(err.errors).map((e) => e.message);
+      return res.status(400).json({ message: messages.join(" "), errors: messages });
+    }
+    res.status(500).json({ message: "Erreur lors de la modification du don.", error: err.message });
+  }
+});
+
+// GET /api/donations/:id — Récupérer un don précis (pour pré-remplir le formulaire d'édition)
+router.get("/:id", requireAuth, requireAssociation, async (req, res) => {
+  try {
+    const donation = await Donation.findOne({ _id: req.params.id, associationId: req.user.associationId });
+    if (!donation) {
+      return res.status(404).json({ message: "Don introuvable." });
+    }
+    res.json({ donation });
+  } catch (err) {
+    res.status(500).json({ message: "Erreur lors de la récupération du don.", error: err.message });
+  }
+});
+
+// GET /api/donations/association/:id/stats — Statistiques détaillées (page Stats)
+router.get("/association/:id/stats", requireAuth, requireAssociation, async (req, res) => {
+  try {
+    if (String(req.user.associationId) !== req.params.id && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Accès interdit à cette association." });
+    }
+
+    const donations = await Donation.find({ associationId: req.params.id });
+
+    const totalDonations = donations.length;
+    const byStatus = {};
+    const byCategory = {};
+    const quantityByUnit = {}; // ex: { kg: 80, portion: 15, litre: 0 }
+    const quantitySavedByUnit = {}; // uniquement les dons "collected"
+
+    for (const d of donations) {
+      byStatus[d.status] = (byStatus[d.status] || 0) + 1;
+      byCategory[d.category] = (byCategory[d.category] || 0) + 1;
+      quantityByUnit[d.unit] = (quantityByUnit[d.unit] || 0) + d.quantity;
+      if (d.status === "collected") {
+        quantitySavedByUnit[d.unit] = (quantitySavedByUnit[d.unit] || 0) + d.quantity;
+      }
+    }
+
+    // Estimation simple : 1 kg ~ 2.5 repas, 1 portion = 1 repas, 1 litre ~ 1 repas (indicatif)
+    const mealsEstimate = Math.round(
+      (quantitySavedByUnit.kg || 0) * 2.5 + (quantitySavedByUnit.portion || 0) + (quantitySavedByUnit.litre || 0)
+    );
+
+    res.json({
+      totalDonations,
+      byStatus,
+      byCategory,
+      quantityByUnit,
+      quantitySavedByUnit,
+      mealsEstimate
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Erreur lors du calcul des statistiques.", error: err.message });
+  }
+});
+
 // GET /api/donations/association/:id — Liste des dons d'une association (tableau de bord)
 router.get("/association/:id", requireAuth, requireAssociation, async (req, res) => {
   try {

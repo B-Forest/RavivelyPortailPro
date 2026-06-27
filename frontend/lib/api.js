@@ -25,8 +25,13 @@ export const api = {
   me: () => request("/auth/me"),
   logout: () => request("/auth/logout", { method: "POST" }),
   createDonation: (payload) => request("/donations", { method: "POST", body: JSON.stringify(payload) }),
+  getDonation: (id) => request(`/donations/${id}`),
+  updateDonation: (id, payload) => request(`/donations/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   getDonationsByAssociation: (associationId) => request(`/donations/association/${associationId}`),
+  getStats: (associationId) => request(`/donations/association/${associationId}/stats`),
   updateDonationStatus: (id, status) =>
     request(`/donations/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
-  deleteDonation: (id) => request(`/donations/${id}`, { method: "DELETE" })
+  deleteDonation: (id) => request(`/donations/${id}`, { method: "DELETE" }),
+  getMyAssociation: () => request("/associations/me"),
+  updateMyAssociation: (payload) => request("/associations/me", { method: "PUT", body: JSON.stringify(payload) })
 };

@@ -1,6 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./app/**/*.{js,jsx}", "./components/**/*.{js,jsx}"],
+  content: ["./app/**/*.{js,jsx}", "./components/**/*.{js,jsx}", "./lib/**/*.{js,jsx}"],
+  safelist: [
+    "bg-emerald-500", "bg-orange-500", "bg-blue-500", "bg-gray-400", "bg-red-500", "text-white"
+  ],
   theme: {
     extend: {
       colors: {
