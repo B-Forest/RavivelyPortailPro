@@ -10,7 +10,7 @@ export function SkeletonBlock({ className = "" }: SkeletonBlockProps) {
 // Skeleton complet pour le tableau de bord (cartes stats + tableau)
 export function DashboardSkeleton() {
   return (
-    <main className="min-h-screen bg-ravively-cream px-4 py-8 sm:px-8">
+    <main className="min-h-screen bg-ravively-cream py-8 pl-[120px] pr-4 sm:pr-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <SkeletonBlock className="h-9 w-64" />
         <div className="flex gap-3">
@@ -48,7 +48,7 @@ export function DashboardSkeleton() {
 // Skeleton générique pour une page de formulaire/carte simple (profil, stats, édition)
 export function CardSkeleton() {
   return (
-    <main className="min-h-screen bg-ravively-cream px-4 py-8 sm:px-8">
+    <main className="min-h-screen bg-ravively-cream py-8 pl-[120px] pr-4 sm:pr-8">
       <div className="mx-auto max-w-2xl">
         <SkeletonBlock className="mb-2 h-8 w-72" />
         <SkeletonBlock className="mb-6 h-5 w-96" />

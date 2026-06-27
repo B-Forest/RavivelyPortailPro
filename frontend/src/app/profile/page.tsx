@@ -7,6 +7,18 @@ import { CardSkeleton } from "../../components/Skeleton";
 import type { AssociationProfilePayload } from "../../lib/types";
 import { getErrorMessage, isApiError } from "../../lib/types";
 
+const FIELDS: { field: keyof AssociationProfilePayload; label: string; type?: string; placeholder?: string }[] = [
+  { field: "name", label: "Nom de l'association", placeholder: "Ex : Banque Alimentaire de Tours" },
+  { field: "email", label: "Email de contact", type: "email", placeholder: "contact@association.fr" },
+  { field: "phone", label: "Téléphone", placeholder: "02 47 00 00 00" },
+  { field: "address", label: "Adresse", placeholder: "12 rue de la Solidarité" },
+  { field: "city", label: "Ville", placeholder: "Tours" },
+  { field: "postalCode", label: "Code postal", placeholder: "37000" },
+  { field: "siret", label: "SIRET", placeholder: "12345678900012" }
+];
+
+const inputClass = "w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:border-ravively-green focus:outline-none";
+
 export default function ProfilePage() {
   const router = useRouter();
   const [form, setForm] = useState<AssociationProfilePayload | null>(null);
@@ -41,8 +53,9 @@ export default function ProfilePage() {
   }, [router]);
 
   function update(field: keyof AssociationProfilePayload) {
-    return (e: ChangeEvent<HTMLInputElement>) =>
+    return (e: ChangeEvent<HTMLInputElement>) => {
       setForm((f) => (f ? { ...f, [field]: e.target.value } : f));
+    };
   }
 
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
@@ -64,97 +77,70 @@ export default function ProfilePage() {
 
   if (loadError) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-ravively-cream px-4">
+      <main className="flex min-h-screen items-center justify-center bg-ravively-cream pl-[120px] pr-4">
         <p className="field-error">{loadError}</p>
       </main>
     );
   }
 
-  if (!form) {
-    return <CardSkeleton />;
-  }
+  if (!form) return <CardSkeleton />;
 
   return (
-    <main className="min-h-screen bg-ravively-cream px-4 py-8 sm:px-8">
+    <main className="min-h-screen bg-ravively-cream py-8 pl-[120px] pr-4 sm:pr-8">
       <div className="mx-auto max-w-2xl">
         <h1 className="mb-1 text-3xl font-bold text-ravively-green">Mon profil association</h1>
         <p className="mb-6 text-lg text-gray-600">Ces informations apparaissent sur vos justificatifs de dons.</p>
 
         <form onSubmit={handleSubmit} className="card space-y-4" aria-label="Formulaire de profil association">
-          <div>
-            <label className="mb-1 block text-base font-medium">Nom de l'association</label>
-            <input
-              value={form.name}
-              onChange={update("name")}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-base font-medium">Email de contact</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={update("email")}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-base font-medium">Téléphone</label>
-            <input
-              value={form.phone}
-              onChange={update("phone")}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-base font-medium">Adresse</label>
-            <input
-              value={form.address}
-              onChange={update("address")}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
-            />
-          </div>
+          {FIELDS.slice(0, 4).map(({ field, label, type, placeholder }) => (
+            <div key={field}>
+              <label htmlFor={`profile-${field}`} className="mb-1 block text-base font-medium">{label}</label>
+              <input
+                id={`profile-${field}`}
+                type={type ?? "text"}
+                value={(form[field] as string | undefined) ?? ""}
+                onChange={update(field)}
+                placeholder={placeholder}
+                className={inputClass}
+              />
+            </div>
+          ))}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-base font-medium">Ville</label>
-              <input
-                value={form.city}
-                onChange={update("city")}
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-base font-medium">Code postal</label>
-              <input
-                value={form.postalCode}
-                onChange={update("postalCode")}
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
-              />
-            </div>
+            {FIELDS.slice(4, 6).map(({ field, label, placeholder }) => (
+              <div key={field}>
+                <label htmlFor={`profile-${field}`} className="mb-1 block text-base font-medium">{label}</label>
+                <input
+                  id={`profile-${field}`}
+                  value={(form[field] as string | undefined) ?? ""}
+                  onChange={update(field)}
+                  placeholder={placeholder}
+                  className={inputClass}
+                />
+              </div>
+            ))}
           </div>
 
           <div>
-            <label className="mb-1 block text-base font-medium">SIRET</label>
+            <label htmlFor="profile-siret" className="mb-1 block text-base font-medium">SIRET</label>
             <input
-              value={form.siret}
+              id="profile-siret"
+              value={form.siret ?? ""}
               onChange={update("siret")}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
+              placeholder="12345678900012"
+              className={inputClass}
             />
           </div>
 
           {serverError && <p className="field-error" role="alert">{serverError}</p>}
           {success && <p className="font-medium text-ravively-green" role="status">{success}</p>}
 
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4 pt-1">
             <button type="submit" disabled={submitting} className="btn-primary">
               {submitting ? "Enregistrement..." : "Enregistrer"}
             </button>
             <button type="button" onClick={() => router.push("/dashboard")} className="btn-ghost">
-              Retour au tableau de bord
+              Retour
             </button>
           </div>
         </form>

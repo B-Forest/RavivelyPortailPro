@@ -4,6 +4,59 @@ const { requireAuth, requireAssociation } = require("../middleware/auth");
 
 const router = express.Router();
 
+// POST /api/donations/bulk — Importer plusieurs dons en une fois
+router.post("/bulk", requireAuth, requireAssociation, async (req, res) => {
+  try {
+    const associationId = req.user.associationId;
+    if (!associationId) {
+      return res.status(400).json({ message: "Aucune association rattachée à ce compte." });
+    }
+
+    const { donations: rows } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ message: "Aucune ligne à importer." });
+    }
+    if (rows.length > 200) {
+      return res.status(400).json({ message: "Maximum 200 dons par import." });
+    }
+
+    const created = [];
+    const failed = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      try {
+        const donation = await Donation.create({
+          associationId,
+          title: row.title,
+          description: row.description,
+          category: row.category,
+          quantity: row.quantity,
+          unit: row.unit,
+          expirationDate: row.expirationDate,
+          allergens: row.allergens || [],
+          pickupInstructions: row.pickupInstructions,
+          status: "available"
+        });
+        created.push(donation);
+      } catch (err) {
+        const messages = err.name === "ValidationError"
+          ? Object.values(err.errors).map((e) => e.message)
+          : [err.message];
+        failed.push({ row: i + 1, errors: messages });
+      }
+    }
+
+    res.status(201).json({
+      created: created.length,
+      failed: failed.length,
+      errors: failed
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Erreur lors de l'import en masse.", error: err.message });
+  }
+});
+
 // POST /api/donations — Déclarer un nouveau don (association uniquement)
 router.post("/", requireAuth, requireAssociation, async (req, res) => {
   try {

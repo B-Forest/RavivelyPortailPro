@@ -170,7 +170,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-ravively-cream px-4 py-8 sm:px-8">
+    <main className="min-h-screen bg-ravively-cream py-8 pl-[120px] pr-4 sm:pr-8">
       <header className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-3xl font-bold text-ravively-green">Où en sont mes dons ?</h1>

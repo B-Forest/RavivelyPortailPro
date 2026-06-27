@@ -41,7 +41,7 @@ export default function StatsPage() {
 
   if (error) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-ravively-cream px-4">
+      <main className="flex min-h-screen items-center justify-center bg-ravively-cream pl-[120px] pr-4">
         <p className="field-error">{error}</p>
       </main>
     );
@@ -54,7 +54,7 @@ export default function StatsPage() {
   const unitEntries = Object.entries(stats.quantitySavedByUnit || {}) as [DonationUnit, number][];
 
   return (
-    <main className="min-h-screen bg-ravively-cream px-4 py-8 sm:px-8">
+    <main className="min-h-screen bg-ravively-cream py-8 pl-[120px] pr-4 sm:pr-8">
       <div className="mx-auto max-w-3xl">
         <h1 className="mb-1 text-3xl font-bold text-ravively-green">Statistiques de mon association</h1>
         <p className="mb-6 text-lg text-gray-600">L'impact de vos dons en un coup d'œil.</p>

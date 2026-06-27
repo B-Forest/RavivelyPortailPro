@@ -11,6 +11,8 @@ import type {
   RegisterAssociationPayload,
   User
 } from "./types";
+import type { FieldExtractResponse, GlobalExtractResponse } from "./voice/types";
+import type { FieldDonationExtractResponse, GlobalDonationExtractResponse } from "./voice/donation/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
@@ -74,5 +76,30 @@ export const api = {
     request<{ association: Association }>("/associations/me", {
       method: "PUT",
       body: JSON.stringify(payload)
+    }),
+  extractVoiceProfileGlobal: (transcription: string) =>
+    request<GlobalExtractResponse>("/voice/extract-profile", {
+      method: "POST",
+      body: JSON.stringify({ transcription, mode: "global" })
+    }),
+  extractVoiceProfileField: (transcription: string, field: string) =>
+    request<FieldExtractResponse>("/voice/extract-profile", {
+      method: "POST",
+      body: JSON.stringify({ transcription, mode: "field", field })
+    }),
+  extractVoiceDonationGlobal: (transcription: string, currentForm?: Record<string, unknown>) =>
+    request<GlobalDonationExtractResponse>("/voice/extract-donation", {
+      method: "POST",
+      body: JSON.stringify({ transcription, mode: "global", currentForm })
+    }),
+  extractVoiceDonationField: (transcription: string, field: string, currentForm?: Record<string, unknown>) =>
+    request<FieldDonationExtractResponse>("/voice/extract-donation", {
+      method: "POST",
+      body: JSON.stringify({ transcription, mode: "field", field, currentForm })
+    }),
+  importDonationsBulk: (donations: CreateDonationPayload[]) =>
+    request<{ created: number; failed: number; errors: { row: number; errors: string[] }[] }>("/donations/bulk", {
+      method: "POST",
+      body: JSON.stringify({ donations })
     })
 };
