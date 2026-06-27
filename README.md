@@ -9,39 +9,47 @@ Membres : Benjamin FOREST, ONDONGO Prince de Gloire
 
 ## 1. Stack technique
 
-| Couche       | Techno                                   |
-|--------------|-------------------------------------------|
-| Front-end    | Next.js 14 (App Router) + Tailwind CSS    |
-| Back-end     | Node.js + Express.js                      |
-| Base de données | MongoDB + Mongoose                     |
-| Auth         | JWT stocké en cookie httpOnly sécurisé    |
+| Couche          | Techno                                              |
+|-----------------|-----------------------------------------------------|
+| Front-end       | Next.js 16 (App Router) + TypeScript + Tailwind v4  |
+| UI              | React 19, Cache Components (`use cache`)          |
+| Back-end        | Node.js + Express.js                                |
+| Base de données | MongoDB + Mongoose                                  |
+| Auth            | JWT stocké en cookie httpOnly sécurisé              |
 
 ## 2. Structure du dépôt
 
 ```
 ravively-pro/
-├── backend/              # API Express / MongoDB
+├── backend/                    # API Express / MongoDB
 │   ├── config/db.js
 │   ├── middleware/auth.js
 │   ├── models/{User,Association,Donation}.js
-│   ├── routes/{auth,donations}.js
-│   ├── seed.js           # jeu de données de démo
+│   ├── routes/{auth,associations,donations}.js
+│   ├── seed.js                 # jeu de données de démo
 │   └── server.js
-└── frontend/              # Next.js App Router
-    ├── app/
-    │   ├── login/page.jsx
-    │   ├── register/page.jsx
-    │   ├── dashboard/page.jsx
-    │   └── donations/new/page.jsx
-    ├── components/StatusBadge.jsx
-    ├── lib/{api.js,constants.js}
-    └── middleware.js      # protection des routes /dashboard et /donations
+└── frontend/                   # Next.js App Router (TypeScript)
+    ├── src/
+    │   ├── app/
+    │   │   ├── login/page.tsx
+    │   │   ├── register/page.tsx
+    │   │   ├── dashboard/page.tsx
+    │   │   ├── profile/page.tsx
+    │   │   ├── stats/page.tsx
+    │   │   ├── donations/new/page.tsx
+    │   │   └── donations/[id]/edit/page.tsx
+    │   ├── components/
+    │   ├── lib/{api,constants,types,exportCsv}.ts
+    │   └── proxy.ts            # protection /dashboard, /donations, /profile, /stats
+    ├── next.config.ts
+    ├── tsconfig.json
+    └── postcss.config.mjs      # Tailwind v4 (@tailwindcss/postcss)
 ```
 
 ## 3. Installation et lancement
 
 ### Pré-requis
-- Node.js ≥ 18
+- Node.js ≥ 20.9 (requis pour Next.js 16)
 - Une instance MongoDB (locale via `mongod`, ou un cluster MongoDB Atlas gratuit)
 
 ### Backend
@@ -50,7 +58,7 @@ cd backend
 cp .env.example .env       # renseigner MONGO_URI et JWT_SECRET
 npm install
 npm run seed                # (optionnel) crée un compte + des dons de démo
-npm run dev                  # démarre l'API sur http://localhost:4000
+npm run dev                 # démarre l'API sur http://localhost:4000
 ```
 
 ### Frontend
@@ -58,7 +66,7 @@ npm run dev                  # démarre l'API sur http://localhost:4000
 cd frontend
 cp .env.local.example .env.local
 npm install
-npm run dev                  # démarre le portail sur http://localhost:3000
+npm run dev                 # démarre le portail sur http://localhost:3000
 ```
 
 Compte de démonstration créé par `npm run seed` :
@@ -81,13 +89,17 @@ Pour rester dans le budget et le délai d'un MVP étudiant :
 ## 5. Back-office / administration du don
 
 Le tableau de bord fait office de back-office minimal pour les associations :
-- Liste de toutes leurs annonces avec statut (`available`, `reserved`, `in_progress`,
+- Liste des annonces actives et historique (récupérés / annulés), avec recherche, filtres et tri.
+- Changement de statut directement depuis le tableau (`available`, `reserved`, `in_progress`,
   `collected`, `cancelled`).
-- Changement de statut directement depuis le tableau (suivi du cycle de vie du don).
-- Statistiques en un coup d'œil (`DashboardStats` : total, disponibles, récupérés).
-- Spécifications techniques : voir modèle de données fourni (`Donation`, `Association`,
-  `User`) et règles métier (seules les associations créent des dons, DLC/quantité/unité
-  obligatoires, allergènes renseignables).
+- Modification d'un don existant (`/donations/[id]/edit`).
+- Export CSV des dons filtrés.
+- Badges d'alerte DLC (ExpiryBadge).
+- Statistiques rapides sur le dashboard et page dédiée `/stats` (répartition, repas estimés).
+- Page profil association (`/profile`) : coordonnées, SIRET, etc.
+- Spécifications techniques : voir modèles `Donation`, `Association`, `User` et règles métier
+  (seules les associations créent des dons, DLC/quantité/unité obligatoires, allergènes
+  renseignables).
 
 ## 6. Recettage / tests réalisés
 
