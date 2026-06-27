@@ -1,31 +1,23 @@
 "use client";
 
-import { useState, type ChangeEvent, type SubmitEvent } from "react";
+import { useCallback, useRef, useState, type ChangeEvent, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
 import { CATEGORIES, UNITS, ALLERGENS } from "../../../lib/constants";
-import type {
-  Allergen,
-  CreateDonationPayload,
-  DonationCategory,
-  DonationUnit
-} from "../../../lib/types";
+import { VoiceTextField } from "../../../components/voice/VoiceTextField";
+import { ConfirmOverwriteModal } from "../../../components/ConfirmOverwriteModal";
+import type { Allergen, CreateDonationPayload, DonationCategory, DonationUnit } from "../../../lib/types";
 import { getErrorMessage } from "../../../lib/types";
+import type { DonationFormVoiceState, DonationVoiceField } from "../../../lib/voice/donation/types";
+import { DONATION_VOICE_FIELD_LABELS } from "../../../lib/voice/donation/types";
+import { donationAIExtractionService } from "../../../lib/voice/donation/aiExtractionService";
+import { donationAutoFillService } from "../../../lib/voice/donation/donationAutoFillService";
+import { validateFieldExtraction, validateGlobalExtraction } from "../../../lib/voice/donation/validationService";
+import { CATEGORIES as CAT_LIST, UNITS as UNIT_LIST } from "../../../lib/constants";
 
-interface DonationFormState {
-  title: string;
-  category: DonationCategory | "";
-  quantity: string;
-  unit: DonationUnit | "";
-  expirationDate: string;
-  allergens: Allergen[];
-  pickupInstructions: string;
-  description: string;
-}
+type DonationFormErrors = Partial<Record<keyof DonationFormVoiceState, string>>;
 
-type DonationFormErrors = Partial<Record<keyof DonationFormState, string>>;
-
-const initialState: DonationFormState = {
+const initialState: DonationFormVoiceState = {
   title: "",
   category: "",
   quantity: "",
@@ -33,19 +25,60 @@ const initialState: DonationFormState = {
   expirationDate: "",
   allergens: [],
   pickupInstructions: "",
-  description: ""
 };
+
+const inputClass =
+  "w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:border-ravively-green focus:outline-none";
 
 export default function NewDonationPage() {
   const router = useRouter();
-  const [form, setForm] = useState<DonationFormState>(initialState);
+  const [form, setForm] = useState<DonationFormVoiceState>(initialState);
+  const [description, setDescription] = useState("");
   const [errors, setErrors] = useState<DonationFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState("");
+  const [voiceFilled, setVoiceFilled] = useState<Set<DonationVoiceField>>(new Set());
+  const [globalFillMessage, setGlobalFillMessage] = useState<string | null>(null);
 
-  function update(field: keyof DonationFormState) {
-    return (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+  // ── Confirm overwrite modal (replaces window.confirm) ──
+  type ModalState = { fieldLabel: string; currentValue: string; newValue: string };
+  const [confirmModal, setConfirmModal] = useState<ModalState | null>(null);
+  const confirmResolveRef = useRef<((v: boolean) => void) | null>(null);
+
+  /** Human-readable display for a raw field value */
+  function toDisplayValue(field: DonationVoiceField, raw: string): string {
+    if (field === "category") return CAT_LIST.find((c) => c.value === raw)?.label ?? raw;
+    if (field === "unit") return UNIT_LIST.find((u) => u.value === raw)?.label ?? raw;
+    return raw;
+  }
+
+  const openConfirmModal = useCallback(
+    (field: DonationVoiceField, currentRaw: string, newRaw: string): Promise<boolean> =>
+      new Promise((resolve) => {
+        confirmResolveRef.current = resolve;
+        setConfirmModal({
+          fieldLabel: DONATION_VOICE_FIELD_LABELS[field],
+          currentValue: toDisplayValue(field, currentRaw),
+          newValue: toDisplayValue(field, newRaw),
+        });
+      }),
+    []
+  );
+
+  const handleModalConfirm = () => {
+    setConfirmModal(null);
+    confirmResolveRef.current?.(true);
+  };
+
+  const handleModalCancel = () => {
+    setConfirmModal(null);
+    confirmResolveRef.current?.(false);
+  };
+
+  function update(field: keyof DonationFormVoiceState) {
+    return (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       setForm((f) => ({ ...f, [field]: e.target.value }));
+    };
   }
 
   function toggleAllergen(value: Allergen) {
@@ -75,7 +108,7 @@ export default function NewDonationPage() {
       expirationDate: form.expirationDate,
       allergens: form.allergens,
       pickupInstructions: form.pickupInstructions || undefined,
-      description: form.description || undefined
+      description: description || undefined
     };
   }
 
@@ -83,63 +116,127 @@ export default function NewDonationPage() {
     e.preventDefault();
     setServerError("");
     if (!validate()) return;
-
     setSubmitting(true);
     try {
       await api.createDonation(buildPayload());
       router.push("/dashboard");
     } catch (err) {
-      const message = err instanceof Error ? getErrorMessage(err, "Impossible d'enregistrer le don.") : "Impossible d'enregistrer le don.";
-      setServerError(message);
+      setServerError(err instanceof Error ? getErrorMessage(err, "Impossible d'enregistrer le don.") : "Impossible d'enregistrer le don.");
     } finally {
       setSubmitting(false);
     }
   }
 
+  /** Global: fill all fields from one spoken phrase */
+  const handleGlobalVoice = useCallback(
+    async (transcription: string) => {
+      const response = await donationAIExtractionService.extractGlobal(transcription, form);
+      const validated = validateGlobalExtraction(response.data);
+      if (!validated.ok) throw new Error(validated.errors.join(" "));
+
+      const result = await donationAutoFillService.applyPatch(
+        form,
+        validated.patch,
+        openConfirmModal
+      );
+
+      if (result.filledFields.length === 0) {
+        throw new Error("Aucune donnée détectée dans votre phrase.");
+      }
+
+      setForm(result.form);
+      setVoiceFilled((prev) => new Set([...prev, ...result.filledFields]));
+      setGlobalFillMessage(
+        `Rempli : ${result.filledFields.map((f) => DONATION_VOICE_FIELD_LABELS[f]).join(", ")}.`
+      );
+    },
+    [form]
+  );
+
+  /** Apply voice extraction for a single form field */
+  const makeVoiceHandler = useCallback(
+    (field: DonationVoiceField) => async (transcription: string) => {
+      const response = await donationAIExtractionService.extractField(transcription, field, form);
+      const validated = validateFieldExtraction(response.data);
+      if (!validated.ok) throw new Error(validated.errors.join(" "));
+
+      const result = await donationAutoFillService.applyPatch(
+        form,
+        validated.patch,
+        openConfirmModal
+      );
+
+      if (result.filledFields.length === 0) {
+        throw new Error(`Aucune donnée détectée pour « ${DONATION_VOICE_FIELD_LABELS[field]} ».`);
+      }
+
+      setForm(result.form);
+      setVoiceFilled((prev) => new Set([...prev, field]));
+    },
+    [form]
+  );
+
   return (
-    <main className="min-h-screen bg-ravively-cream px-4 py-8 sm:px-8">
+    <main className="min-h-screen bg-ravively-cream py-8 pl-[120px] pr-4 sm:pr-8">
       <div className="mx-auto max-w-2xl">
         <h1 className="mb-1 text-3xl font-bold text-ravively-green">Déclarer un nouveau don</h1>
         <p className="mb-6 text-lg text-gray-600">Remplissez ce formulaire simple, étape par étape.</p>
 
-        <form onSubmit={handleSubmit} className="card space-y-6" aria-label="Formulaire de déclaration de don">
-          {/* Dénomination */}
+        <form onSubmit={handleSubmit} className="card space-y-5" aria-label="Formulaire de déclaration de don">
+
+          {/* ── Assistant vocal global ── */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-2">
+            <p className="text-sm font-medium text-gray-700">
+              Décrire le don en une phrase
+            </p>
+            <VoiceTextField
+              value=""
+              onChange={() => {}}
+              onVoiceSubmit={handleGlobalVoice}
+              placeholder="Ex : « Je donne 30 pains au chocolat, la DLC c'est demain, il y a du gluten et du lait. Les bénévoles peuvent passer par la porte de service à partir de 14h. »"
+              multiline
+              rows={2}
+              disabled={submitting}
+            />
+            {globalFillMessage && (
+              <p className="text-sm text-ravively-green font-medium" role="status">
+                ✓ {globalFillMessage}
+              </p>
+            )}
+          </div>
+
+          {/* 1. Produit */}
           <div>
             <label htmlFor="title" className="mb-1 block text-base font-medium">
               1. Quel produit donnez-vous ? *
             </label>
-            <input
+            <VoiceTextField
               id="title"
               value={form.title}
-              onChange={update("title")}
+              onChange={(v) => setForm((f) => ({ ...f, title: v }))}
+              onVoiceSubmit={makeVoiceHandler("title")}
               placeholder="Ex : Pains et viennoiseries du jour"
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:border-ravively-green focus:outline-none"
+              voiceFilled={voiceFilled.has("title")}
+              disabled={submitting}
             />
             {errors.title && <p className="field-error">{errors.title}</p>}
           </div>
 
-          {/* Catégorisation */}
+          {/* 2. Catégorie */}
           <div>
             <label htmlFor="category" className="mb-1 block text-base font-medium">
               2. Catégorie *
             </label>
-            <select
-              id="category"
-              value={form.category}
-              onChange={update("category")}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
-            >
+            <select id="category" value={form.category} onChange={update("category")} className={inputClass}>
               <option value="">Choisissez une catégorie</option>
               {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
+                <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
             {errors.category && <p className="field-error">{errors.category}</p>}
           </div>
 
-          {/* Volumes */}
+          {/* 3. Quantité + Unité */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="quantity" className="mb-1 block text-base font-medium">
@@ -153,7 +250,7 @@ export default function NewDonationPage() {
                 value={form.quantity}
                 onChange={update("quantity")}
                 placeholder="Ex : 30"
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
+                className={inputClass}
               />
               {errors.quantity && <p className="field-error">{errors.quantity}</p>}
             </div>
@@ -161,24 +258,17 @@ export default function NewDonationPage() {
               <label htmlFor="unit" className="mb-1 block text-base font-medium">
                 Unité *
               </label>
-              <select
-                id="unit"
-                value={form.unit}
-                onChange={update("unit")}
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
-              >
+              <select id="unit" value={form.unit} onChange={update("unit")} className={inputClass}>
                 <option value="">Choisissez une unité</option>
                 {UNITS.map((u) => (
-                  <option key={u.value} value={u.value}>
-                    {u.label}
-                  </option>
+                  <option key={u.value} value={u.value}>{u.label}</option>
                 ))}
               </select>
               {errors.unit && <p className="field-error">{errors.unit}</p>}
             </div>
           </div>
 
-          {/* DLC */}
+          {/* 4. DLC */}
           <div>
             <label htmlFor="expirationDate" className="mb-1 block text-base font-medium">
               4. Date limite de consommation (DLC) *
@@ -188,14 +278,14 @@ export default function NewDonationPage() {
               type="date"
               value={form.expirationDate}
               onChange={update("expirationDate")}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
+              className={inputClass}
             />
             {errors.expirationDate && <p className="field-error">{errors.expirationDate}</p>}
           </div>
 
-          {/* Allergènes */}
+          {/* 5. Allergènes */}
           <div>
-            <p className="mb-2 block text-base font-medium">5. Allergènes présents (si connus)</p>
+            <p className="mb-2 text-base font-medium">5. Allergènes présents (si connus)</p>
             <div className="flex flex-wrap gap-2">
               {ALLERGENS.map((a) => (
                 <label
@@ -218,37 +308,42 @@ export default function NewDonationPage() {
             </div>
           </div>
 
-          {/* Consignes de récupération */}
+          {/* 6. Consignes */}
           <div>
             <label htmlFor="pickupInstructions" className="mb-1 block text-base font-medium">
               6. Consignes de récupération
             </label>
-            <input
+            <VoiceTextField
               id="pickupInstructions"
               value={form.pickupInstructions}
-              onChange={update("pickupInstructions")}
+              onChange={(v) => setForm((f) => ({ ...f, pickupInstructions: v }))}
+              onVoiceSubmit={makeVoiceHandler("pickupInstructions")}
               placeholder="Ex : Passer par la porte de service derrière la mairie"
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
+              voiceFilled={voiceFilled.has("pickupInstructions")}
+              disabled={submitting}
             />
           </div>
 
-          {/* Description libre */}
+          {/* Précisions */}
           <div>
             <label htmlFor="description" className="mb-1 block text-base font-medium">
               Précisions complémentaires (optionnel)
             </label>
-            <textarea
+            <VoiceTextField
               id="description"
-              value={form.description}
-              onChange={update("description")}
+              value={description}
+              onChange={setDescription}
+              onVoiceSubmit={async (text) => setDescription(text)}
+              placeholder="Informations supplémentaires sur le don…"
+              multiline
               rows={3}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-lg"
+              disabled={submitting}
             />
           </div>
 
           {serverError && <p className="field-error" role="alert">{serverError}</p>}
 
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4 pt-1">
             <button type="submit" disabled={submitting} className="btn-primary">
               {submitting ? "Enregistrement..." : "Valider le don"}
             </button>
@@ -258,6 +353,15 @@ export default function NewDonationPage() {
           </div>
         </form>
       </div>
+
+      <ConfirmOverwriteModal
+        isOpen={!!confirmModal}
+        fieldLabel={confirmModal?.fieldLabel ?? ""}
+        currentValue={confirmModal?.currentValue ?? ""}
+        newValue={confirmModal?.newValue ?? ""}
+        onConfirm={handleModalConfirm}
+        onCancel={handleModalCancel}
+      />
     </main>
   );
 }
