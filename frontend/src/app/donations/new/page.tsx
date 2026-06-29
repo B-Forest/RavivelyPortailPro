@@ -178,7 +178,7 @@ export default function NewDonationPage() {
 
   return (
     <main className="min-h-screen bg-ravively-cream py-8 pl-[120px] pr-4 sm:pr-8">
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-5xl">
         <h1 className="mb-1 text-3xl font-bold text-ravively-green">Déclarer un nouveau don</h1>
         <p className="mb-6 text-lg text-gray-600">Remplissez ce formulaire simple, étape par étape.</p>
 
